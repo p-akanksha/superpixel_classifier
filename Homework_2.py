@@ -719,6 +719,7 @@ class VGG(nn.Module):
         
         super(VGG, self).__init__()
         
+        self.batch_norm = batch_norm
         if batch_norm:
             self.batchnorm_dict = [6, 13, 23, 33, 43]
         else:
@@ -731,6 +732,10 @@ class VGG(nn.Module):
         self.roi_layer4 = self.roi_pooling(h = 14, w = 14, output_size=7)
         self.roi_layer5 = self.roi_pooling(h = 7, w = 7, output_size=7)
         self.conv_layer = nn.Conv2d(1472, 512, kernel_size=1)
+
+        if self.batch_norm:
+            self.bn = nn.BatchNorm2d(512)
+
         self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
         self.classifier = nn.Sequential(
             nn.Linear(512 * 7 * 7, 4096),
@@ -796,8 +801,13 @@ class VGG(nn.Module):
         conv4_roi = self.roi_layer4(conv4_output)
         conv5_roi = self.roi_layer5(conv5_output)
         
-        x = torch.cat([conv1_roi, conv2_roi, conv3_roi, conv4_roi, conv5_roi], dim=1)        
-        x = F.relu(self.conv_layer(x))
+        x = torch.cat([conv1_roi, conv2_roi, conv3_roi, conv4_roi, conv5_roi], dim=1)
+
+        if self.batch_norm:
+            x = F.relu(self.bn(self.conv_layer(x)))
+        else:
+            x = F.relu(self.conv_layer(x))
+
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.classifier(x)
@@ -981,14 +991,6 @@ def _vgg(arch: str, cfg: str, batch_norm: bool, pretrained: bool, progress: bool
     for param in model.parameters():
         param.requires_grad = True
 
-
-    model.conv_layer.requires_grad = True
-    model.roi_layer1.requires_grad = True
-    model.roi_layer2.requires_grad = True
-    model.roi_layer3.requires_grad = True
-    model.roi_layer4.requires_grad = True
-    model.roi_layer5.requires_grad = True
-
     return model
 
 def load_model(pretrained, batch_norm=False):
@@ -1017,7 +1019,8 @@ val_dataloader = torch.utils.data.DataLoader(transformed_dataset_val, batch_size
 # model
 print('loading model')
 lr = 1e-2
-batch_norm=True
+batch_norm = True
+val_period = 5
 net = load_model(pretrained=True, batch_norm=batch_norm)
 set_parameter_requires_grad(net, fc_finetuning=True)
 # net.features = nn.Sequential(net.features[0:5], net.roi_pooling(), net.features[5:])
@@ -1027,7 +1030,7 @@ net = net.to(device)
 # print(net)
 
 # train the model
-train_obj = Solver(net, optimizer='SGD', loss='CrossEntropyLoss', lr=lr, lr_schedule=[30, 50])
+train_obj = Solver(net, optimizer='SGD', loss='CrossEntropyLoss', lr=lr, lr_schedule=[30, 50], lr_factor=0.5)
 training_accs = []
 training_loss = []
 testing_accs = []
@@ -1039,7 +1042,7 @@ for epoch in tqdm(range(0, 50)):
     print(f'Training Loss is: {loss}')
     print(f'Training Accuracy is: {train_acc}')
     
-    if (epoch + 1) % 5 == 0:
+    if (epoch + 1) % val_period == 0:
         test_acc = train_obj.test(data_loader=val_dataloader, device=device, epoch=epoch)
         print(f'Testing Accuracy is: {test_acc}')
         testing_accs.append(test_acc)
@@ -1063,18 +1066,24 @@ torch.save(state, save_path)
 
 #plotting
 training_index = list(np.arange(0, len(training_accs)))
-testing_index = list(np.arange(0, len(testing_accs)))
+testing_index = list(np.arange(0, len(training_accs), val_period))
 
 fig = plt.figure()
 plot_paths = save_path[:-4]
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
 plt.plot(training_index, training_accs)
 plt.savefig(plot_paths + '_training_accs.png')
 
 fig = plt.figure()
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
 plt.plot(training_index, training_loss)
 plt.savefig(plot_paths + '_training_loss.png')
 
 fig = plt.figure()
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
 plt.plot(testing_index, testing_accs)
 plt.savefig(plot_paths + '_testing_accs.png')
 
