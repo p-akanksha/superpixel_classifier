@@ -619,22 +619,41 @@ class Solver(object):
 # transformation_train = get_transform(True)
 # transformed_dataset_train = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_train_{version}',
 #                                              csv_file='complete_train_data.csv', transform=transformation_train)
-# train_dataloader = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=32, shuffle=True, num_workers=4)
+# train_dataloader = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=128, shuffle=True, num_workers=4)
 
 # transformation_val = get_transform(False)
 # transformed_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='complete_val_data.csv', transform=transformation_val)
-# val_dataloader = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=32, shuffle=False, num_workers=4)
+# val_dataloader = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=128, shuffle=False, num_workers=4)
 
 # # transformed_particular_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='6_14_s.csv', transform=transformation_val, loc=True)
 # # particular_val_dataloader = torch.utils.data.DataLoader(transformed_particular_dataset_val, batch_size=1, shuffle=False, num_workers=4)
 
+
 # # model
-# net = models.vgg16(pretrained=True)
-# print(net)
-# set_parameter_requires_grad(net, fc_finetuning=True)
+# lr = 1e-2
+# batch_norm = True
+# val_period = 5
+# fc_finetuning=True
+
+# if batch_norm:
+#     net = models.vgg16_bn(pretrained=True)
+# else:
+#     net = models.vgg16(pretrained=True)
+# set_parameter_requires_grad(net, fc_finetuning=fc_finetuning)
 # net.classifier[6] = nn.Linear(4096, num_classes[version])
-# net = net.to(device)
+# # net.classifier = nn.Sequential(
+# #                                 nn.Linear(512 * 7 * 7, 4096),
+# #                                 nn.BatchNorm1d(4096),
+# #                                 nn.ReLU(True),
+# #                                 nn.Dropout(),
+# #                                 nn.Linear(4096, 4096),
+# #                                 nn.BatchNorm1d(4096),
+# #                                 nn.ReLU(True),
+# #                                 nn.Dropout(),
+# #                                 nn.Linear(4096, num_classes[version]),
+# #                             )
 # print(net)
+# net = net.to(device)
 
 # # train the model
 # lr = 1e-02
@@ -665,7 +684,7 @@ class Solver(object):
 #          'train_acc': training_accs[-1],
 #          'test_acc': testing_accs[-1]}
 
-# save_path = os.path.join('checkpoints', f'vgg16_lr={lr}_epoch={epoch}.pth')
+# save_path = os.path.join('checkpoints', f'vgg16_lr={lr}_epoch={epoch}_batch_norm={batch_norm}_fc_finetuning_{fc_finetuning}.pth')
 # if not os.path.isdir('./checkpoints'):
 #     os.makedirs('./checkpoints')
 
@@ -674,18 +693,24 @@ class Solver(object):
 
 # #plotting
 # training_index = list(np.arange(0, len(training_accs)))
-# testing_index = list(np.arange(0, len(testing_accs)))
+# testing_index = list(np.arange(5, len(training_accs) + 1, val_period))
 
 # fig = plt.figure()
 # plot_paths = save_path[:-4]
+# plt.xlabel('Epochs')
+# plt.ylabel('Accuracy')
 # plt.plot(training_index, training_accs)
 # plt.savefig(plot_paths + '_training_accs.png')
 
 # fig = plt.figure()
+# plt.xlabel('Epochs')
+# plt.ylabel('Loss')
 # plt.plot(training_index, training_loss)
 # plt.savefig(plot_paths + '_training_loss.png')
 
 # fig = plt.figure()
+# plt.xlabel('Epochs')
+# plt.ylabel('Accuracy')
 # plt.plot(testing_index, testing_accs)
 # plt.savefig(plot_paths + '_testing_accs.png')
 
@@ -726,12 +751,13 @@ class VGG(nn.Module):
             self.batchnorm_dict = [4, 9, 16, 23, 30]
 
         self.features = features
-        self.roi_layer1 = self.roi_pooling(h = 112, w = 112, output_size=7)
+        # self.roi_layer1 = self.roi_pooling(h = 112, w = 112, output_size=7)
         self.roi_layer2 = self.roi_pooling(h = 56, w = 56, output_size=7)
         self.roi_layer3 = self.roi_pooling(h = 28, w = 28, output_size=7)
         self.roi_layer4 = self.roi_pooling(h = 14, w = 14, output_size=7)
         self.roi_layer5 = self.roi_pooling(h = 7, w = 7, output_size=7)
-        self.conv_layer = nn.Conv2d(1472, 512, kernel_size=1)
+        # self.conv_layer = nn.Conv2d(1472, 512, kernel_size=1)
+        self.conv_layer = nn.Conv2d(1408, 512, kernel_size=1)
 
         if self.batch_norm:
             self.bn = nn.BatchNorm2d(512)
@@ -795,13 +821,14 @@ class VGG(nn.Module):
                 
             count = count + 1
         
-        conv1_roi = self.roi_layer1(conv1_output)
+        # conv1_roi = self.roi_layer1(conv1_output)
         conv2_roi = self.roi_layer2(conv2_output)
         conv3_roi = self.roi_layer3(conv3_output)
         conv4_roi = self.roi_layer4(conv4_output)
         conv5_roi = self.roi_layer5(conv5_output)
         
-        x = torch.cat([conv1_roi, conv2_roi, conv3_roi, conv4_roi, conv5_roi], dim=1)
+        # x = torch.cat([conv1_roi, conv2_roi, conv3_roi, conv4_roi, conv5_roi], dim=1)
+        x = torch.cat([conv2_roi, conv3_roi, conv4_roi, conv5_roi], dim=1)
 
         if self.batch_norm:
             x = F.relu(self.bn(self.conv_layer(x)))
@@ -859,134 +886,15 @@ def _vgg(arch: str, cfg: str, batch_norm: bool, pretrained: bool, progress: bool
     for param in model.parameters():
         param.requires_grad = False
 
-    # for param in model.classifier.parameters():
-    #     print(param.requires_grad)
-
     if pretrained:
         state_dict = torch.hub.load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
         # model.load_state_dict(state_dict)
-        if not batch_norm:
-            model.features[0].weight.copy_(state_dict['features.0.weight'])
-            model.features[0].bias.copy_(state_dict['features.0.bias'])
-            model.features[2].weight.copy_(state_dict['features.2.weight'])
-            model.features[2].bias.copy_(state_dict['features.2.bias'])
-            model.features[5].weight.copy_(state_dict['features.5.weight'])
-            model.features[5].bias.copy_(state_dict['features.5.bias'])
-            model.features[7].weight.copy_(state_dict['features.7.weight'])
-            model.features[7].bias.copy_(state_dict['features.7.bias'])
-            model.features[10].weight.copy_(state_dict['features.10.weight'])
-            model.features[10].bias.copy_(state_dict['features.10.bias'])
-            model.features[12].weight.copy_(state_dict['features.12.weight'])
-            model.features[12].bias.copy_(state_dict['features.12.bias'])
-            model.features[14].weight.copy_(state_dict['features.14.weight'])
-            model.features[14].bias.copy_(state_dict['features.14.bias'])
-            model.features[17].weight.copy_(state_dict['features.17.weight'])
-            model.features[17].bias.copy_(state_dict['features.17.bias'])
-            model.features[19].weight.copy_(state_dict['features.19.weight'])
-            model.features[19].bias.copy_(state_dict['features.19.bias'])
-            model.features[21].weight.copy_(state_dict['features.21.weight'])
-            model.features[21].bias.copy_(state_dict['features.21.bias'])
-            model.features[24].weight.copy_(state_dict['features.24.weight'])
-            model.features[24].bias.copy_(state_dict['features.24.bias'])
-            model.features[26].weight.copy_(state_dict['features.26.weight'])
-            model.features[26].bias.copy_(state_dict['features.26.bias'])
-            model.features[28].weight.copy_(state_dict['features.28.weight'])
-            model.features[28].bias.copy_(state_dict['features.28.bias'])
-            model.classifier[0].weight.copy_(state_dict['classifier.0.weight'])
-            model.classifier[0].bias.copy_(state_dict['classifier.0.bias'])
-            model.classifier[3].weight.copy_(state_dict['classifier.3.weight'])
-            model.classifier[3].bias.copy_(state_dict['classifier.3.bias'])
-            model.classifier[6].weight.copy_(state_dict['classifier.6.weight'])
-            model.classifier[6].bias.copy_(state_dict['classifier.6.bias'])
 
-        else:
-
-            model.features[0].weight.copy_(state_dict['features.0.weight'])
-            model.features[0].bias.copy_(state_dict['features.0.bias'])
-            model.features[1].weight.copy_(state_dict['features.1.weight'])
-            model.features[1].bias.copy_(state_dict['features.1.bias'])
-            model.features[1].running_mean.copy_(state_dict['features.1.running_mean'])
-            model.features[1].running_var.copy_(state_dict['features.1.running_var'])
-            model.features[3].weight.copy_(state_dict['features.3.weight'])
-            model.features[3].bias.copy_(state_dict['features.3.bias'])
-            model.features[4].weight.copy_(state_dict['features.4.weight'])
-            model.features[4].bias.copy_(state_dict['features.4.bias'])
-            model.features[4].running_mean.copy_(state_dict['features.4.running_mean'])
-            model.features[4].running_var.copy_(state_dict['features.4.running_var'])
-            model.features[7].weight.copy_(state_dict['features.7.weight'])
-            model.features[7].bias.copy_(state_dict['features.7.bias'])
-            model.features[8].weight.copy_(state_dict['features.8.weight'])
-            model.features[8].bias.copy_(state_dict['features.8.bias'])
-            model.features[8].running_mean.copy_(state_dict['features.8.running_mean'])
-            model.features[8].running_var.copy_(state_dict['features.8.running_var'])
-            model.features[10].weight.copy_(state_dict['features.10.weight'])
-            model.features[10].bias.copy_(state_dict['features.10.bias'])
-            model.features[11].weight.copy_(state_dict['features.11.weight'])
-            model.features[11].bias.copy_(state_dict['features.11.bias'])
-            model.features[11].running_mean.copy_(state_dict['features.11.running_mean'])
-            model.features[11].running_var.copy_(state_dict['features.11.running_var'])
-            model.features[14].weight.copy_(state_dict['features.14.weight'])
-            model.features[14].bias.copy_(state_dict['features.14.bias'])
-            model.features[15].weight.copy_(state_dict['features.15.weight'])
-            model.features[15].bias.copy_(state_dict['features.15.bias'])
-            model.features[15].running_mean.copy_(state_dict['features.15.running_mean'])
-            model.features[15].running_var.copy_(state_dict['features.15.running_var'])
-            model.features[17].weight.copy_(state_dict['features.17.weight'])
-            model.features[17].bias.copy_(state_dict['features.17.bias'])
-            model.features[18].weight.copy_(state_dict['features.18.weight'])
-            model.features[18].bias.copy_(state_dict['features.18.bias'])
-            model.features[18].running_mean.copy_(state_dict['features.18.running_mean'])
-            model.features[18].running_var.copy_(state_dict['features.18.running_var'])
-            model.features[20].weight.copy_(state_dict['features.20.weight'])
-            model.features[20].bias.copy_(state_dict['features.20.bias'])
-            model.features[21].weight.copy_(state_dict['features.21.weight'])
-            model.features[21].bias.copy_(state_dict['features.21.bias'])
-            model.features[21].running_mean.copy_(state_dict['features.21.running_mean'])
-            model.features[21].running_var.copy_(state_dict['features.21.running_var'])
-            model.features[24].weight.copy_(state_dict['features.24.weight'])
-            model.features[24].bias.copy_(state_dict['features.24.bias'])
-            model.features[25].weight.copy_(state_dict['features.25.weight'])
-            model.features[25].bias.copy_(state_dict['features.25.bias'])
-            model.features[25].running_mean.copy_(state_dict['features.25.running_mean'])
-            model.features[25].running_var.copy_(state_dict['features.25.running_var'])
-            model.features[27].weight.copy_(state_dict['features.27.weight'])
-            model.features[27].bias.copy_(state_dict['features.27.bias'])
-            model.features[28].weight.copy_(state_dict['features.28.weight'])
-            model.features[28].bias.copy_(state_dict['features.28.bias'])
-            model.features[28].running_mean.copy_(state_dict['features.28.running_mean'])
-            model.features[28].running_var.copy_(state_dict['features.28.running_var'])
-            model.features[30].weight.copy_(state_dict['features.30.weight'])
-            model.features[30].bias.copy_(state_dict['features.30.bias'])
-            model.features[31].weight.copy_(state_dict['features.31.weight'])
-            model.features[31].bias.copy_(state_dict['features.31.bias'])
-            model.features[31].running_mean.copy_(state_dict['features.31.running_mean'])
-            model.features[31].running_var.copy_(state_dict['features.31.running_var'])
-            model.features[34].weight.copy_(state_dict['features.34.weight'])
-            model.features[34].bias.copy_(state_dict['features.34.bias'])
-            model.features[35].weight.copy_(state_dict['features.35.weight'])
-            model.features[35].bias.copy_(state_dict['features.35.bias'])
-            model.features[35].running_mean.copy_(state_dict['features.35.running_mean'])
-            model.features[35].running_var.copy_(state_dict['features.35.running_var'])
-            model.features[37].weight.copy_(state_dict['features.37.weight'])
-            model.features[37].bias.copy_(state_dict['features.37.bias'])
-            model.features[38].weight.copy_(state_dict['features.38.weight'])
-            model.features[38].bias.copy_(state_dict['features.38.bias'])
-            model.features[38].running_mean.copy_(state_dict['features.38.running_mean'])
-            model.features[38].running_var.copy_(state_dict['features.38.running_var'])
-            model.features[40].weight.copy_(state_dict['features.40.weight'])
-            model.features[40].bias.copy_(state_dict['features.40.bias'])
-            model.features[41].weight.copy_(state_dict['features.41.weight'])
-            model.features[41].bias.copy_(state_dict['features.41.bias'])
-            model.features[41].running_mean.copy_(state_dict['features.41.running_mean'])
-            model.features[41].running_var.copy_(state_dict['features.41.running_var'])
-            model.classifier[0].weight.copy_(state_dict['classifier.0.weight'])
-            model.classifier[0].bias.copy_(state_dict['classifier.0.bias'])
-            model.classifier[3].weight.copy_(state_dict['classifier.3.weight'])
-            model.classifier[3].bias.copy_(state_dict['classifier.3.bias'])
-            model.classifier[6].weight.copy_(state_dict['classifier.6.weight'])
-            model.classifier[6].bias.copy_(state_dict['classifier.6.bias'])
-
+        for key in state_dict.keys():
+            lst = key.split('.')
+            layer_name = f'model.{lst[0]}[{lst[1]}].{lst[2]}'
+            eval(layer_name).copy_(state_dict[key])
 
     for param in model.parameters():
         param.requires_grad = True
@@ -1007,7 +915,7 @@ print('Training network using: ', device)
 transformation_train = get_transform(True)
 transformed_dataset_train = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_train_{version}',
                                              csv_file='complete_train_data.csv', transform=transformation_train)
-train_dataloader = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=128, shuffle=True, num_workers=4)
+train_dataloader = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=32, shuffle=True, num_workers=4)
 
 transformation_val = get_transform(False)
 transformed_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='complete_val_data.csv', transform=transformation_val)
@@ -1021,10 +929,21 @@ print('loading model')
 lr = 1e-2
 batch_norm = True
 val_period = 5
+fc_finetuning=True
 net = load_model(pretrained=True, batch_norm=batch_norm)
-set_parameter_requires_grad(net, fc_finetuning=True)
-# net.features = nn.Sequential(net.features[0:5], net.roi_pooling(), net.features[5:])
+set_parameter_requires_grad(net, fc_finetuning=fc_finetuning)
 net.classifier[6] = nn.Linear(4096, num_classes[version])
+# net.classifier = nn.Sequential(
+#                                 nn.Linear(512 * 7 * 7, 4096),
+#                                 nn.BatchNorm1d(4096),
+#                                 nn.ReLU(True),
+#                                 nn.Dropout(),
+#                                 nn.Linear(4096, 4096),
+#                                 nn.BatchNorm1d(4096),
+#                                 nn.ReLU(True),
+#                                 nn.Dropout(),
+#                                 nn.Linear(4096, num_classes[version]),
+#                             )
 print(net)
 net = net.to(device)
 # print(net)
@@ -1057,7 +976,7 @@ state = {'net': net.state_dict(),
          'train_acc': training_accs[-1],
          'test_acc': testing_accs[-1]}
 
-save_path = os.path.join('checkpoints', f'vgg16_lr={lr}_epoch={epoch}_batch_norm={batch_norm}_roi_conv.pth')
+save_path = os.path.join('checkpoints', f'vgg16_lr={lr}_epoch={epoch}_batch_norm={batch_norm}_fc_finetuning_{fc_finetuning}_roi_conv.pth')
 if not os.path.isdir('./checkpoints'):
     os.makedirs('./checkpoints')
 
@@ -1066,7 +985,7 @@ torch.save(state, save_path)
 
 #plotting
 training_index = list(np.arange(0, len(training_accs)))
-testing_index = list(np.arange(0, len(training_accs), val_period))
+testing_index = list(np.arange(5, len(training_accs) + 1, val_period))
 
 fig = plt.figure()
 plot_paths = save_path[:-4]
@@ -1077,13 +996,13 @@ plt.savefig(plot_paths + '_training_accs.png')
 
 fig = plt.figure()
 plt.xlabel('Epochs')
-plt.ylabel('Accuracy')
+plt.ylabel('Loss')
 plt.plot(training_index, training_loss)
 plt.savefig(plot_paths + '_training_loss.png')
 
 fig = plt.figure()
 plt.xlabel('Epochs')
-plt.ylabel('Loss')
+plt.ylabel('Accuracy')
 plt.plot(testing_index, testing_accs)
 plt.savefig(plot_paths + '_testing_accs.png')
 
