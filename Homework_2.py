@@ -19,11 +19,11 @@
 # 3. Define the segmentation loss as multi-class classification loss and train a convolutional neural network based classifier
 # 4. During inference, we combine the classifier's predicted labels to form the whole input image's Superpixel segmentation results.
 
-# In[ ]:
+# In[1]:
 
 
-# get_ipython().system('wget http://download.microsoft.com/download/A/1/1/A116CD80-5B79-407E-B5CE-3D5C6ED8B0D5/msrc_objcategimagedatabase_v1.zip')
-# get_ipython().system('unzip --qq msrc_objcategimagedatabase_v1.zip')
+# !wget http://download.microsoft.com/download/A/1/1/A116CD80-5B79-407E-B5CE-3D5C6ED8B0D5/msrc_objcategimagedatabase_v1.zip
+# !unzip --qq msrc_objcategimagedatabase_v1.zip
 
 
 # In[1]:
@@ -113,7 +113,7 @@ current_directory = os.getcwd()
 msrc_directory = current_directory + '/MSRC_ObjCategImageDatabase_v1'
 
 
-# In[155]:
+# In[4]:
 
 
 #Superpixel dataset preparation
@@ -160,10 +160,8 @@ SEG_LABELS_LIST_v2 = [
 
 # create a map rgb_2_label, where mapping the ground truth 3-d array segmentation into a single ID label.
 rgb_2_label = {}
-label_2_rgb = {}
 for i in SEG_LABELS_LIST_v2:
     rgb_2_label[tuple(i['rgb_values'])] = i['id']
-    label_2_rgb[i['id']] = i['rgb_values']
 
 
 # Suggested algorithm: Save the superpixels along with their segmentation class
@@ -181,14 +179,14 @@ for i in SEG_LABELS_LIST_v2:
 # 
 # 
 
-# In[35]:
+# In[5]:
 
 
 # from IPython.display import Image
 # Image(filename='data_preprocessing.png') 
 
 
-# In[225]:
+# In[6]:
 
 
 # run SLIC on each original images and save the (segment patch, ID label) pair
@@ -356,7 +354,7 @@ if run_mode.lower() == 'generate':
 # 
 # This is a dataset 
 
-# In[226]:
+# In[7]:
 
 
 import os
@@ -371,7 +369,7 @@ import torchvision.models as models
 import torch.nn.functional as F
 import pandas as pd
 import torchvision.models as models
-import ast
+# import ast
 
 # -------------
 # Dataset class
@@ -453,7 +451,7 @@ class SegmentationData(data.Dataset):
 # 
 # We use a pre-trained network (like VGG) and replace the last few layers with a fully connected layer.
 
-# In[227]:
+# In[8]:
 
 
 # Model definition
@@ -476,7 +474,7 @@ def set_parameter_requires_grad(model, fc_finetuning):
 # 
 # Finally, we define the classification loss and optimizer such that we can learn a superpixel classifier from the backproporgation algorithm. 
 
-# In[230]:
+# In[9]:
 
 
 # Optimizer 
@@ -610,8 +608,394 @@ class Solver(object):
 # 1. Randomly split the whole dataset into train and test subset (80:20 split is fine), show us the training loss of the classifier after every epoch, and then training accuracy and test accuracy of the classifier after training.
 # 2. At least one visualization on the test segmentation map v.s. ground truth segmentation map.
 
-# In[232]:
+# In[10]:
 
+
+# version='v1'
+# num_classes = {'v1':10, 'v2':24}
+# device = "cuda" if torch.cuda.is_available() else "cpu"
+# print('Training network using: ', device)
+# # load the data
+# transformation_train = get_transform(True)
+# transformed_dataset_train = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_train_{version}',
+#                                              csv_file='complete_train_data.csv', transform=transformation_train)
+# train_dataloader = torch.utils.data.DataLoader(transformed_dataset_train, batch_size=32, shuffle=True, num_workers=4)
+
+# transformation_val = get_transform(False)
+# transformed_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='complete_val_data.csv', transform=transformation_val)
+# val_dataloader = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=32, shuffle=False, num_workers=4)
+
+# # transformed_particular_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='6_14_s.csv', transform=transformation_val, loc=True)
+# # particular_val_dataloader = torch.utils.data.DataLoader(transformed_particular_dataset_val, batch_size=1, shuffle=False, num_workers=4)
+
+# # model
+# net = models.vgg16(pretrained=True)
+# print(net)
+# set_parameter_requires_grad(net, fc_finetuning=True)
+# net.classifier[6] = nn.Linear(4096, num_classes[version])
+# net = net.to(device)
+# print(net)
+
+# # train the model
+# lr = 1e-02
+# train_obj = Solver(net, optimizer='SGD', loss='CrossEntropyLoss', lr=lr, lr_schedule=[30, 50])
+# training_accs = []
+# training_loss = []
+# testing_accs = []
+# for epoch in tqdm(range(0, 50)):
+#     train_obj.adjust_learning_rate(epoch)
+#     loss, train_acc = train_obj.train(data_loader=train_dataloader, device=device)
+#     training_accs.append(train_acc)
+#     training_loss.append(loss)
+#     print(f'Training Loss is: {loss}')
+#     print(f'Training Accuracy is: {train_acc}')
+    
+#     if (epoch + 1) % 5 == 0:
+#         test_acc = train_obj.test(data_loader=val_dataloader, device=device, epoch=epoch)
+#         print(f'Testing Accuracy is: {test_acc}')
+#         testing_accs.append(test_acc)
+
+# #     if (epoch + 1) % 2 == 0:
+# #         one_img_acc = train_obj.test(data_loader=particular_val_dataloader, device=device, loc=True, epoch=epoch)
+# #         print(f'Single Image Testing Accuracy is: {one_img_acc}')
+
+# state = {'net': net.state_dict(),
+#          'epoch': epoch,
+#          'optimizer': train_obj.optimizer.state_dict(),
+#          'train_acc': training_accs[-1],
+#          'test_acc': testing_accs[-1]}
+
+# save_path = os.path.join('checkpoints', f'vgg16_lr={lr}_epoch={epoch}.pth')
+# if not os.path.isdir('./checkpoints'):
+#     os.makedirs('./checkpoints')
+
+# torch.save(state, save_path)
+
+
+# #plotting
+# training_index = list(np.arange(0, len(training_accs)))
+# testing_index = list(np.arange(0, len(testing_accs)))
+
+# fig = plt.figure()
+# plot_paths = save_path[:-4]
+# plt.plot(training_index, training_accs)
+# plt.savefig(plot_paths + '_training_accs.png')
+
+# fig = plt.figure()
+# plt.plot(training_index, training_loss)
+# plt.savefig(plot_paths + '_training_loss.png')
+
+# fig = plt.figure()
+# plt.plot(testing_index, testing_accs)
+# plt.savefig(plot_paths + '_testing_accs.png')
+
+
+# ## Bonus Qs:
+# We always want to increase the classifier accuracy and achieve a better performance by building a complicated deep learning model. There are a lot of tricks which are very popular and work in practice. Try to implement either of following two,
+# 
+# 1. Could you effictively fuse different deep features from multiple layers in your network? You are welcome to use the pretrained network. Does your network achieve a better accuracy? There are a lot of exploration in the literature, including ION (Inside-Outside Net) [1], Hypercolumns [2], and PixelNet [3]. The following figure illustrates ION architecture combining features from different layers. Can you do similar thing for our Superpixel classifier?
+
+# In[19]:
+
+
+#TODO
+from typing import Union, List, Dict, Any, cast
+
+__all__ = ['VGG', 'vgg16', 'vgg16_bn']
+
+
+model_urls = {'vgg16': 'https://download.pytorch.org/models/vgg16-397923af.pth',
+              'vgg16_bn': 'https://download.pytorch.org/models/vgg16_bn-6c64b313.pth'}
+
+class VGG(nn.Module):
+
+    def __init__(
+        self,
+        features: nn.Module,
+        num_classes: int = 1000,
+        init_weights: bool = True,
+        batch_norm=False
+    ) -> None:
+        
+        super(VGG, self).__init__()
+        
+        if batch_norm:
+            self.batchnorm_dict = [6, 13, 23, 33, 43]
+        else:
+            self.batchnorm_dict = [4, 9, 16, 23, 30]
+
+        self.features = features
+        self.roi_layer1 = self.roi_pooling(h = 112, w = 112, output_size=7)
+        self.roi_layer2 = self.roi_pooling(h = 56, w = 56, output_size=7)
+        self.roi_layer3 = self.roi_pooling(h = 28, w = 28, output_size=7)
+        self.roi_layer4 = self.roi_pooling(h = 14, w = 14, output_size=7)
+        self.roi_layer5 = self.roi_pooling(h = 7, w = 7, output_size=7)
+        self.conv_layer = nn.Conv2d(1472, 512, kernel_size=1)
+        self.avgpool = nn.AdaptiveAvgPool2d((7, 7))
+        self.classifier = nn.Sequential(
+            nn.Linear(512 * 7 * 7, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, 4096),
+            nn.ReLU(True),
+            nn.Dropout(),
+            nn.Linear(4096, num_classes),
+        )
+        if init_weights:
+            self._initialize_weights()
+            
+    def roi_pooling(self, h, w, output_size = 7):
+        y = []
+        if h != w:
+            print("This is unexpected! Non-square input")
+        
+        patch_size = int(h/output_size)
+        roi_max_pool = nn.MaxPool2d(kernel_size=patch_size, stride=patch_size)
+        # y = self.roi_max_pool(x).to(x.device)
+        y.append(roi_max_pool)
+
+        return nn.Sequential(*y)
+    
+    # def roi_conv(self):
+    #     layers = []
+    #     self.roi_conv_layer = nn.Conv2d(1472, 512, kernel_size=1)
+    #     layers.append(self.roi_conv_layer)
+    #     print('roi_conv')
+    #     return nn.Sequential(*layers)      
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        count=0
+        device = x.device
+        for layer in self.features:
+            x = layer(x)
+            if count == self.batchnorm_dict[0]:
+                conv1_output = x.clone()
+                conv1_output = F.normalize(conv1_output, p=2, dim=1)
+                
+            elif count == self.batchnorm_dict[1]:
+                conv2_output = x.clone()
+                conv2_output = F.normalize(conv2_output, p=2, dim=1)
+                
+            elif count == self.batchnorm_dict[2]:
+                conv3_output = x.clone()
+                conv3_output = F.normalize(conv3_output, p=2, dim=1)
+                
+            elif count == self.batchnorm_dict[3]:
+                conv4_output = x.clone()
+                conv4_output = F.normalize(conv4_output, p=2, dim=1)
+                
+            elif count == self.batchnorm_dict[4]:
+                conv5_output = x.clone()
+                conv5_output = F.normalize(conv5_output, p=2, dim=1)
+                
+            count = count + 1
+        
+        conv1_roi = self.roi_layer1(conv1_output)
+        conv2_roi = self.roi_layer2(conv2_output)
+        conv3_roi = self.roi_layer3(conv3_output)
+        conv4_roi = self.roi_layer4(conv4_output)
+        conv5_roi = self.roi_layer5(conv5_output)
+        
+        x = torch.cat([conv1_roi, conv2_roi, conv3_roi, conv4_roi, conv5_roi], dim=1)        
+        x = F.relu(self.conv_layer(x))
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        x = self.classifier(x)
+        
+        return x
+
+    def _initialize_weights(self) -> None:
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.normal_(m.weight, 0, 0.01)
+                nn.init.constant_(m.bias, 0)
+
+
+def make_layers(cfg: List[Union[str, int]], batch_norm: bool = False) -> nn.Sequential:
+    layers: List[nn.Module] = []
+    in_channels = 3
+    
+    for v in cfg:
+        if v == 'M':
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+        else:
+            v = cast(int, v)
+            conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
+            if batch_norm:
+                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+            else:
+                layers += [conv2d, nn.ReLU(inplace=True)]
+            in_channels = v
+    return nn.Sequential(*layers)
+
+
+cfgs: Dict[str, List[Union[str, int]]] = {
+    'A': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+}
+    
+def _vgg(arch: str, cfg: str, batch_norm: bool, pretrained: bool, progress: bool, **kwargs: Any) -> VGG:
+    if pretrained:
+        kwargs['init_weights'] = True
+        kwargs['batch_norm'] = batch_norm
+    model = VGG(make_layers(cfgs[cfg], batch_norm=batch_norm), **kwargs)
+
+    for param in model.parameters():
+        param.requires_grad = False
+
+    # for param in model.classifier.parameters():
+    #     print(param.requires_grad)
+
+    if pretrained:
+        state_dict = torch.hub.load_state_dict_from_url(model_urls[arch],
+                                              progress=progress)
+        # model.load_state_dict(state_dict)
+        if not batch_norm:
+            model.features[0].weight.copy_(state_dict['features.0.weight'])
+            model.features[0].bias.copy_(state_dict['features.0.bias'])
+            model.features[2].weight.copy_(state_dict['features.2.weight'])
+            model.features[2].bias.copy_(state_dict['features.2.bias'])
+            model.features[5].weight.copy_(state_dict['features.5.weight'])
+            model.features[5].bias.copy_(state_dict['features.5.bias'])
+            model.features[7].weight.copy_(state_dict['features.7.weight'])
+            model.features[7].bias.copy_(state_dict['features.7.bias'])
+            model.features[10].weight.copy_(state_dict['features.10.weight'])
+            model.features[10].bias.copy_(state_dict['features.10.bias'])
+            model.features[12].weight.copy_(state_dict['features.12.weight'])
+            model.features[12].bias.copy_(state_dict['features.12.bias'])
+            model.features[14].weight.copy_(state_dict['features.14.weight'])
+            model.features[14].bias.copy_(state_dict['features.14.bias'])
+            model.features[17].weight.copy_(state_dict['features.17.weight'])
+            model.features[17].bias.copy_(state_dict['features.17.bias'])
+            model.features[19].weight.copy_(state_dict['features.19.weight'])
+            model.features[19].bias.copy_(state_dict['features.19.bias'])
+            model.features[21].weight.copy_(state_dict['features.21.weight'])
+            model.features[21].bias.copy_(state_dict['features.21.bias'])
+            model.features[24].weight.copy_(state_dict['features.24.weight'])
+            model.features[24].bias.copy_(state_dict['features.24.bias'])
+            model.features[26].weight.copy_(state_dict['features.26.weight'])
+            model.features[26].bias.copy_(state_dict['features.26.bias'])
+            model.features[28].weight.copy_(state_dict['features.28.weight'])
+            model.features[28].bias.copy_(state_dict['features.28.bias'])
+            model.classifier[0].weight.copy_(state_dict['classifier.0.weight'])
+            model.classifier[0].bias.copy_(state_dict['classifier.0.bias'])
+            model.classifier[3].weight.copy_(state_dict['classifier.3.weight'])
+            model.classifier[3].bias.copy_(state_dict['classifier.3.bias'])
+            model.classifier[6].weight.copy_(state_dict['classifier.6.weight'])
+            model.classifier[6].bias.copy_(state_dict['classifier.6.bias'])
+
+        else:
+
+            model.features[0].weight.copy_(state_dict['features.0.weight'])
+            model.features[0].bias.copy_(state_dict['features.0.bias'])
+            model.features[1].weight.copy_(state_dict['features.1.weight'])
+            model.features[1].bias.copy_(state_dict['features.1.bias'])
+            model.features[1].running_mean.copy_(state_dict['features.1.running_mean'])
+            model.features[1].running_var.copy_(state_dict['features.1.running_var'])
+            model.features[3].weight.copy_(state_dict['features.3.weight'])
+            model.features[3].bias.copy_(state_dict['features.3.bias'])
+            model.features[4].weight.copy_(state_dict['features.4.weight'])
+            model.features[4].bias.copy_(state_dict['features.4.bias'])
+            model.features[4].running_mean.copy_(state_dict['features.4.running_mean'])
+            model.features[4].running_var.copy_(state_dict['features.4.running_var'])
+            model.features[7].weight.copy_(state_dict['features.7.weight'])
+            model.features[7].bias.copy_(state_dict['features.7.bias'])
+            model.features[8].weight.copy_(state_dict['features.8.weight'])
+            model.features[8].bias.copy_(state_dict['features.8.bias'])
+            model.features[8].running_mean.copy_(state_dict['features.8.running_mean'])
+            model.features[8].running_var.copy_(state_dict['features.8.running_var'])
+            model.features[10].weight.copy_(state_dict['features.10.weight'])
+            model.features[10].bias.copy_(state_dict['features.10.bias'])
+            model.features[11].weight.copy_(state_dict['features.11.weight'])
+            model.features[11].bias.copy_(state_dict['features.11.bias'])
+            model.features[11].running_mean.copy_(state_dict['features.11.running_mean'])
+            model.features[11].running_var.copy_(state_dict['features.11.running_var'])
+            model.features[14].weight.copy_(state_dict['features.14.weight'])
+            model.features[14].bias.copy_(state_dict['features.14.bias'])
+            model.features[15].weight.copy_(state_dict['features.15.weight'])
+            model.features[15].bias.copy_(state_dict['features.15.bias'])
+            model.features[15].running_mean.copy_(state_dict['features.15.running_mean'])
+            model.features[15].running_var.copy_(state_dict['features.15.running_var'])
+            model.features[17].weight.copy_(state_dict['features.17.weight'])
+            model.features[17].bias.copy_(state_dict['features.17.bias'])
+            model.features[18].weight.copy_(state_dict['features.18.weight'])
+            model.features[18].bias.copy_(state_dict['features.18.bias'])
+            model.features[18].running_mean.copy_(state_dict['features.18.running_mean'])
+            model.features[18].running_var.copy_(state_dict['features.18.running_var'])
+            model.features[20].weight.copy_(state_dict['features.20.weight'])
+            model.features[20].bias.copy_(state_dict['features.20.bias'])
+            model.features[21].weight.copy_(state_dict['features.21.weight'])
+            model.features[21].bias.copy_(state_dict['features.21.bias'])
+            model.features[21].running_mean.copy_(state_dict['features.21.running_mean'])
+            model.features[21].running_var.copy_(state_dict['features.21.running_var'])
+            model.features[24].weight.copy_(state_dict['features.24.weight'])
+            model.features[24].bias.copy_(state_dict['features.24.bias'])
+            model.features[25].weight.copy_(state_dict['features.25.weight'])
+            model.features[25].bias.copy_(state_dict['features.25.bias'])
+            model.features[25].running_mean.copy_(state_dict['features.25.running_mean'])
+            model.features[25].running_var.copy_(state_dict['features.25.running_var'])
+            model.features[27].weight.copy_(state_dict['features.27.weight'])
+            model.features[27].bias.copy_(state_dict['features.27.bias'])
+            model.features[28].weight.copy_(state_dict['features.28.weight'])
+            model.features[28].bias.copy_(state_dict['features.28.bias'])
+            model.features[28].running_mean.copy_(state_dict['features.28.running_mean'])
+            model.features[28].running_var.copy_(state_dict['features.28.running_var'])
+            model.features[30].weight.copy_(state_dict['features.30.weight'])
+            model.features[30].bias.copy_(state_dict['features.30.bias'])
+            model.features[31].weight.copy_(state_dict['features.31.weight'])
+            model.features[31].bias.copy_(state_dict['features.31.bias'])
+            model.features[31].running_mean.copy_(state_dict['features.31.running_mean'])
+            model.features[31].running_var.copy_(state_dict['features.31.running_var'])
+            model.features[34].weight.copy_(state_dict['features.34.weight'])
+            model.features[34].bias.copy_(state_dict['features.34.bias'])
+            model.features[35].weight.copy_(state_dict['features.35.weight'])
+            model.features[35].bias.copy_(state_dict['features.35.bias'])
+            model.features[35].running_mean.copy_(state_dict['features.35.running_mean'])
+            model.features[35].running_var.copy_(state_dict['features.35.running_var'])
+            model.features[37].weight.copy_(state_dict['features.37.weight'])
+            model.features[37].bias.copy_(state_dict['features.37.bias'])
+            model.features[38].weight.copy_(state_dict['features.38.weight'])
+            model.features[38].bias.copy_(state_dict['features.38.bias'])
+            model.features[38].running_mean.copy_(state_dict['features.38.running_mean'])
+            model.features[38].running_var.copy_(state_dict['features.38.running_var'])
+            model.features[40].weight.copy_(state_dict['features.40.weight'])
+            model.features[40].bias.copy_(state_dict['features.40.bias'])
+            model.features[41].weight.copy_(state_dict['features.41.weight'])
+            model.features[41].bias.copy_(state_dict['features.41.bias'])
+            model.features[41].running_mean.copy_(state_dict['features.41.running_mean'])
+            model.features[41].running_var.copy_(state_dict['features.41.running_var'])
+            model.classifier[0].weight.copy_(state_dict['classifier.0.weight'])
+            model.classifier[0].bias.copy_(state_dict['classifier.0.bias'])
+            model.classifier[3].weight.copy_(state_dict['classifier.3.weight'])
+            model.classifier[3].bias.copy_(state_dict['classifier.3.bias'])
+            model.classifier[6].weight.copy_(state_dict['classifier.6.weight'])
+            model.classifier[6].bias.copy_(state_dict['classifier.6.bias'])
+
+
+    for param in model.parameters():
+        param.requires_grad = True
+
+
+    model.conv_layer.requires_grad = True
+    model.roi_layer1.requires_grad = True
+    model.roi_layer2.requires_grad = True
+    model.roi_layer3.requires_grad = True
+    model.roi_layer4.requires_grad = True
+    model.roi_layer5.requires_grad = True
+
+    return model
+
+def load_model(pretrained, batch_norm=False):
+    if not batch_norm:
+        return _vgg('vgg16', 'A', False, pretrained, True)
+    else:
+        return _vgg('vgg16_bn', 'A', True, pretrained, True)
 
 version='v1'
 num_classes = {'v1':10, 'v2':24}
@@ -625,19 +1009,24 @@ train_dataloader = torch.utils.data.DataLoader(transformed_dataset_train, batch_
 
 transformation_val = get_transform(False)
 transformed_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='complete_val_data.csv', transform=transformation_val)
-val_dataloader = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=256, shuffle=False, num_workers=4)
+val_dataloader = torch.utils.data.DataLoader(transformed_dataset_val, batch_size=32, shuffle=False, num_workers=4)
 
-transformed_particular_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='6_14_s.csv', transform=transformation_val, loc=True)
-particular_val_dataloader = torch.utils.data.DataLoader(transformed_particular_dataset_val, batch_size=1, shuffle=False, num_workers=4)
+# transformed_particular_dataset_val = SegmentationData(root_dir=f'./MSRC_ObjCategImageDatabase_v1/rgb_images_val_{version}', csv_file='6_14_s.csv', transform=transformation_val, loc=True)
+# particular_val_dataloader = torch.utils.data.DataLoader(transformed_particular_dataset_val, batch_size=1, shuffle=False, num_workers=4)
 
 # model
-net = models.vgg16(pretrained=True)
+print('loading model')
+lr = 1e-2
+batch_norm=True
+net = load_model(pretrained=True, batch_norm=batch_norm)
 set_parameter_requires_grad(net, fc_finetuning=True)
+# net.features = nn.Sequential(net.features[0:5], net.roi_pooling(), net.features[5:])
 net.classifier[6] = nn.Linear(4096, num_classes[version])
+print(net)
 net = net.to(device)
+# print(net)
 
 # train the model
-lr = 1e-02
 train_obj = Solver(net, optimizer='SGD', loss='CrossEntropyLoss', lr=lr, lr_schedule=[30, 50])
 training_accs = []
 training_loss = []
@@ -655,9 +1044,9 @@ for epoch in tqdm(range(0, 50)):
         print(f'Testing Accuracy is: {test_acc}')
         testing_accs.append(test_acc)
 
-    if (epoch + 1) % 2 == 0:
-        one_img_acc = train_obj.test(data_loader=particular_val_dataloader, device=device, loc=True, epoch=epoch)
-        print(f'Single Image Testing Accuracy is: {one_img_acc}')
+#     if (epoch + 1) % 2 == 0:
+#         one_img_acc = train_obj.test(data_loader=particular_val_dataloader, device=device, loc=True, epoch=epoch)
+#         print(f'Single Image Testing Accuracy is: {one_img_acc}')
 
 state = {'net': net.state_dict(),
          'epoch': epoch,
@@ -665,7 +1054,7 @@ state = {'net': net.state_dict(),
          'train_acc': training_accs[-1],
          'test_acc': testing_accs[-1]}
 
-save_path = os.path.join('checkpoints', f'vgg16_lr={lr}_epoch={epoch}.pth')
+save_path = os.path.join('checkpoints', f'vgg16_lr={lr}_epoch={epoch}_batch_norm={batch_norm}_roi_conv.pth')
 if not os.path.isdir('./checkpoints'):
     os.makedirs('./checkpoints')
 
@@ -688,17 +1077,6 @@ plt.savefig(plot_paths + '_training_loss.png')
 fig = plt.figure()
 plt.plot(testing_index, testing_accs)
 plt.savefig(plot_paths + '_testing_accs.png')
-
-
-# ## Bonus Qs:
-# We always want to increase the classifier accuracy and achieve a better performance by building a complicated deep learning model. There are a lot of tricks which are very popular and work in practice. Try to implement either of following two,
-# 
-# 1. Could you effictively fuse different deep features from multiple layers in your network? You are welcome to use the pretrained network. Does your network achieve a better accuracy? There are a lot of exploration in the literature, including ION (Inside-Outside Net) [1], Hypercolumns [2], and PixelNet [3]. The following figure illustrates ION architecture combining features from different layers. Can you do similar thing for our Superpixel classifier?
-
-# In[ ]:
-
-
-#TODO
 
 
 
